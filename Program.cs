@@ -50,36 +50,103 @@ catch (InvalidOperationException ex)
     return 1;
 }
 
-Console.WriteLine($"Ativo monitorado: {symbol}");
-Console.WriteLine($"Limite de venda:  {sellPrice.ToString("C", ptBr)}");
-Console.WriteLine($"Limite de compra: {buyPrice.ToString("C", ptBr)}");
-Console.WriteLine($"Intervalo:        {settings.IntervalSeconds} segundos");
-
 QuoteService quoteService = new QuoteService();
-
-try
-{
-    decimal price = await quoteService.GetPriceAsync(symbol);
-    Console.WriteLine($"Cotação atual:    {price.ToString("C", ptBr)}");
-}
-catch (QuoteException ex)
-{
-    Console.WriteLine($"Erro na consulta: {ex.Message}");
-}
 EmailService emailService = new EmailService(settings);
 
-try
+using CancellationTokenSource cancellation = new CancellationTokenSource();
+
+Console.CancelKeyPress += (sender, e) =>
 {
-    await emailService.SendAsync(
-        "Teste stock-quote-alert",
-        "Se você recebeu este e-mail, o envio está funcionando.");
-    Console.WriteLine("E-mail de teste enviado.");
-}
-catch (EmailException ex)
+    e.Cancel = true;
+    cancellation.Cancel();
+    Console.WriteLine("Encerrando o monitoramento...");
+};
+
+string sellText = sellPrice.ToString("C", ptBr);
+string buyText = buyPrice.ToString("C", ptBr);
+
+bool sellAlertSent = false;
+bool buyAlertSent = false;
+
+Console.WriteLine($"Monitorando {symbol} | Venda acima de {sellText} | Compra abaixo de {buyText} | Intervalo: {settings.IntervalSeconds} s");
+Console.WriteLine("Pressione Ctrl+C para encerrar.");
+Console.WriteLine();
+
+while (!cancellation.IsCancellationRequested)
 {
-    Console.WriteLine($"Erro no e-mail: {ex.Message}");
+    string now = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
+
+    try
+    {
+        decimal price = await quoteService.GetPriceAsync(symbol);
+        string priceText = price.ToString("C", ptBr);
+
+        if (price > sellPrice)
+        {
+            Console.WriteLine($"[{now}] {symbol}: {priceText} | ALERTA DE VENDA (acima de {sellText})");
+            buyAlertSent = false;
+
+            if (!sellAlertSent)
+            {
+                sellAlertSent = await SendAlertAsync(
+                    emailService,
+                    $"Alerta de venda: {symbol} acima de {sellText}",
+                    $"A cotação de {symbol} está em {priceText}, acima do preço de referência para venda ({sellText}).\n\n" +
+                    $"Recomendação: venda.\nConsulta realizada em {now}.");
+            }
+        }
+        else if (price < buyPrice)
+        {
+            Console.WriteLine($"[{now}] {symbol}: {priceText} | ALERTA DE COMPRA (abaixo de {buyText})");
+            sellAlertSent = false;
+
+            if (!buyAlertSent)
+            {
+                buyAlertSent = await SendAlertAsync(
+                    emailService,
+                    $"Alerta de compra: {symbol} abaixo de {buyText}",
+                    $"A cotação de {symbol} está em {priceText}, abaixo do preço de referência para compra ({buyText}).\n\n" +
+                    $"Recomendação: compra.\nConsulta realizada em {now}.");
+            }
+        }
+        else
+        {
+            Console.WriteLine($"[{now}] {symbol}: {priceText} | Dentro da faixa");
+            sellAlertSent = false;
+            buyAlertSent = false;
+        }
+    }
+    catch (QuoteException ex)
+    {
+        Console.WriteLine($"[{now}] Erro na consulta: {ex.Message} Nova tentativa no próximo ciclo.");
+    }
+
+    try
+    {
+        await Task.Delay(TimeSpan.FromSeconds(settings.IntervalSeconds), cancellation.Token);
+    }
+    catch (OperationCanceledException)
+    {
+    }
 }
+
+Console.WriteLine("Monitoramento encerrado.");
 return 0;
+
+static async Task<bool> SendAlertAsync(EmailService emailService, string subject, string body)
+{
+    try
+    {
+        await emailService.SendAsync(subject, body);
+        Console.WriteLine("    E-mail de alerta enviado.");
+        return true;
+    }
+    catch (EmailException ex)
+    {
+        Console.WriteLine($"    {ex.Message} Nova tentativa no próximo ciclo.");
+        return false;
+    }
+}
 
 static void ShowUsage(string error)
 {
@@ -88,4 +155,3 @@ static void ShowUsage(string error)
     Console.WriteLine("Uso: stock-quote-alert <ATIVO> <PRECO_VENDA> <PRECO_COMPRA>");
     Console.WriteLine("Exemplo: stock-quote-alert PETR4 22.67 22.59");
 }
-
