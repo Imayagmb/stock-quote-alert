@@ -55,6 +55,18 @@ Console.WriteLine($"Limite de venda:  {sellPrice.ToString("C", ptBr)}");
 Console.WriteLine($"Limite de compra: {buyPrice.ToString("C", ptBr)}");
 Console.WriteLine($"Intervalo:        {settings.IntervalSeconds} segundos");
 
+QuoteService quoteService = new QuoteService();
+
+try
+{
+    decimal price = await quoteService.GetPriceAsync(symbol);
+    Console.WriteLine($"Cotação atual:    {price.ToString("C", ptBr)}");
+}
+catch (QuoteException ex)
+{
+    Console.WriteLine($"Erro na consulta: {ex.Message}");
+}
+
 return 0;
 
 static void ShowUsage(string error)
