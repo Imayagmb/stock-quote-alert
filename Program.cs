@@ -66,7 +66,19 @@ catch (QuoteException ex)
 {
     Console.WriteLine($"Erro na consulta: {ex.Message}");
 }
+EmailService emailService = new EmailService(settings);
 
+try
+{
+    await emailService.SendAsync(
+        "Teste stock-quote-alert",
+        "Se você recebeu este e-mail, o envio está funcionando.");
+    Console.WriteLine("E-mail de teste enviado.");
+}
+catch (EmailException ex)
+{
+    Console.WriteLine($"Erro no e-mail: {ex.Message}");
+}
 return 0;
 
 static void ShowUsage(string error)
@@ -76,3 +88,4 @@ static void ShowUsage(string error)
     Console.WriteLine("Uso: stock-quote-alert <ATIVO> <PRECO_VENDA> <PRECO_COMPRA>");
     Console.WriteLine("Exemplo: stock-quote-alert PETR4 22.67 22.59");
 }
+
