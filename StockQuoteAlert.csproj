@@ -13,6 +13,8 @@
   </ItemGroup>
 
 <ItemGroup>
+<None Update="assets/*.png" CopyToOutputDirectory="PreserveNewest" />
   <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
 </ItemGroup>
+
 </Project>

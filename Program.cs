@@ -92,7 +92,8 @@ while (!cancellation.IsCancellationRequested)
                     emailService,
                     $"Alerta de venda: {symbol} acima de {sellText}",
                     $"A cotação de {symbol} está em {priceText}, acima do preço de referência para venda ({sellText}).\n\n" +
-                    $"Recomendação: venda.\nConsulta realizada em {now}.");
+                    $"Recomendação: venda.\nConsulta realizada em {now}.",
+                    "venda.png");
             }
         }
         else if (price < buyPrice)
@@ -106,7 +107,8 @@ while (!cancellation.IsCancellationRequested)
                     emailService,
                     $"Alerta de compra: {symbol} abaixo de {buyText}",
                     $"A cotação de {symbol} está em {priceText}, abaixo do preço de referência para compra ({buyText}).\n\n" +
-                    $"Recomendação: compra.\nConsulta realizada em {now}.");
+                    $"Recomendação: compra.\nConsulta realizada em {now}.",
+                    "compra.png");
             }
         }
         else
@@ -133,11 +135,11 @@ while (!cancellation.IsCancellationRequested)
 Console.WriteLine("Monitoramento encerrado.");
 return 0;
 
-static async Task<bool> SendAlertAsync(EmailService emailService, string subject, string body)
+static async Task<bool> SendAlertAsync(EmailService emailService, string subject, string body, string imageFile)
 {
     try
     {
-        await emailService.SendAsync(subject, body);
+        await emailService.SendAsync(subject, body, imageFile);
         Console.WriteLine("    E-mail de alerta enviado.");
         return true;
     }

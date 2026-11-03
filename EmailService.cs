@@ -20,7 +20,7 @@ public class EmailService
         _smtp = settings.Smtp;
     }
 
-    public async Task SendAsync(string subject, string body)
+    public async Task SendAsync(string subject, string body, string imageFile)
     {
         try
         {
@@ -29,6 +29,18 @@ public class EmailService
             message.To.Add(MailboxAddress.Parse(_email.To));
             message.Subject = subject;
             message.Body = new TextPart("plain") { Text = body };
+
+            BodyBuilder builder = new BodyBuilder();
+            builder.TextBody = body;
+
+            string imagePath = Path.Combine(AppContext.BaseDirectory, "assets", imageFile);
+            MimeEntity image = builder.LinkedResources.Add(imagePath);
+            image.ContentId = "banner";
+
+            string htmlText = System.Net.WebUtility.HtmlEncode(body).Replace("\n", "<br/>");
+            builder.HtmlBody = $"<img src=\"cid:banner\" width=\"600\" alt=\"Alerta\" /><br/><br/>{htmlText}";
+
+            message.Body = builder.ToMessageBody();
 
             using SmtpClient client = new SmtpClient();
             client.CheckCertificateRevocation = false;
