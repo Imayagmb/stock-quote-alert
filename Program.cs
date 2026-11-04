@@ -65,8 +65,7 @@ Console.CancelKeyPress += (sender, e) =>
 string sellText = sellPrice.ToString("C", ptBr);
 string buyText = buyPrice.ToString("C", ptBr);
 
-bool sellAlertSent = false;
-bool buyAlertSent = false;
+AlertMonitor monitor = new AlertMonitor(sellPrice, buyPrice);
 
 Console.WriteLine($"Monitorando {symbol} | Venda acima de {sellText} | Compra abaixo de {buyText} | Intervalo: {settings.IntervalSeconds} s");
 Console.WriteLine("Pressione Ctrl+C para encerrar.");
@@ -80,42 +79,43 @@ while (!cancellation.IsCancellationRequested)
     {
         decimal price = await quoteService.GetPriceAsync(symbol);
         string priceText = price.ToString("C", ptBr);
+        PriceStatus status = monitor.Update(price);
 
-        if (price > sellPrice)
+        if (status == PriceStatus.AboveSell)
         {
             Console.WriteLine($"[{now}] {symbol}: {priceText} | ALERTA DE VENDA (acima de {sellText})");
-            buyAlertSent = false;
 
-            if (!sellAlertSent)
+            if (monitor.ShouldSendAlert(status))
             {
-                sellAlertSent = await SendAlertAsync(
+                bool sent = await SendAlertAsync(
                     emailService,
                     $"Alerta de venda: {symbol} acima de {sellText}",
                     $"A cotação de {symbol} está em {priceText}, acima do preço de referência para venda ({sellText}).\n\n" +
                     $"Recomendação: venda.\nConsulta realizada em {now}.",
                     "venda.png");
+
+                if (sent) monitor.MarkAlertSent(status);
             }
         }
-        else if (price < buyPrice)
+        else if (status == PriceStatus.BelowBuy)
         {
             Console.WriteLine($"[{now}] {symbol}: {priceText} | ALERTA DE COMPRA (abaixo de {buyText})");
-            sellAlertSent = false;
 
-            if (!buyAlertSent)
+            if (monitor.ShouldSendAlert(status))
             {
-                buyAlertSent = await SendAlertAsync(
+                bool sent = await SendAlertAsync(
                     emailService,
                     $"Alerta de compra: {symbol} abaixo de {buyText}",
                     $"A cotação de {symbol} está em {priceText}, abaixo do preço de referência para compra ({buyText}).\n\n" +
                     $"Recomendação: compra.\nConsulta realizada em {now}.",
                     "compra.png");
+
+                if (sent) monitor.MarkAlertSent(status);
             }
         }
         else
         {
             Console.WriteLine($"[{now}] {symbol}: {priceText} | Dentro da faixa");
-            sellAlertSent = false;
-            buyAlertSent = false;
         }
     }
     catch (QuoteException ex)
