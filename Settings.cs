@@ -2,14 +2,12 @@ using System.Text.Json;
 
 namespace StockQuoteAlert;
 
-// Representa o appsettings.json inteiro.
 public class Settings
 {
     public EmailSettings Email { get; set; } = new();
     public SmtpSettings Smtp { get; set; } = new();
     public int IntervalSeconds { get; set; } = 300;
 
-    // Lê o arquivo, converte para objeto e valida.
     public static Settings Load(string path)
     {
         if (!File.Exists(path))
@@ -41,7 +39,6 @@ public class Settings
         return settings;
     }
 
-    // Junta todos os problemas encontrados e mostra de uma vez só.
     private void Validate()
     {
         var errors = new List<string>();

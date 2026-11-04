@@ -28,7 +28,6 @@ public class EmailService
             message.From.Add(MailboxAddress.Parse(_email.From));
             message.To.Add(MailboxAddress.Parse(_email.To));
             message.Subject = subject;
-            message.Body = new TextPart("plain") { Text = body };
 
             BodyBuilder builder = new BodyBuilder();
             builder.TextBody = body;
