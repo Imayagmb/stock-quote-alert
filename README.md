@@ -18,8 +18,9 @@
 
 </div>
 
-# stock-quote-alert
 
+# stock-quote-alert
+ 
 Aplicação de console em C# que monitora a cotação de um ativo da B3 e envia um e-mail quando o preço ultrapassa os limites de compra ou venda definidos pelo usuário.
  
 O sistema apenas monitora e alerta: não executa ordens de compra ou venda, não possui interface gráfica e não utiliza banco de dados.
@@ -47,6 +48,7 @@ Os e-mails de alerta são enviados em HTML, com uma imagem que identifica se o a
 - `System.Text.Json` para leitura do JSON da API e do arquivo de configuração
 - [MailKit](https://github.com/jstedfast/MailKit) para envio de e-mails via SMTP, em HTML com imagem embutida
 - [brapi.dev](https://brapi.dev) como fonte das cotações da B3
+- [xUnit](https://xunit.net) para os testes automatizados
 ## Estrutura do projeto
  
 | Arquivo | Responsabilidade |
@@ -54,8 +56,10 @@ Os e-mails de alerta são enviados em HTML, com uma imagem que identifica se o a
 | `Program.cs` | Valida os argumentos, carrega a configuração e controla o ciclo de monitoramento |
 | `Settings.cs` | Representa e valida as configurações do `appsettings.json` |
 | `QuoteService.cs` | Consulta a API da brapi e extrai o preço da cotação |
+| `AlertMonitor.cs` | Decide a situação da cotação e se um alerta deve ser enviado |
 | `EmailService.cs` | Monta e envia os e-mails de alerta via SMTP |
 | `assets/` | Imagens dos e-mails de alerta de venda e de compra |
+| `tests/` | Testes automatizados da regra de alertas, com preços fixos e com a cotação real |
  
 ## Pré-requisitos
  
@@ -71,7 +75,13 @@ cd stock-quote-alert
  
 ## Configuração
  
-O arquivo `appsettings.json` não é versionado, pois contém credenciais. Crie esse arquivo na raiz do projeto com a seguinte estrutura:
+O arquivo `appsettings.json` não é versionado, pois contém credenciais. Copie o `appsettings.example.json` para `appsettings.json`, na raiz do projeto, e preencha os dados:
+ 
+```bash
+cp appsettings.example.json appsettings.json
+```
+ 
+A estrutura do arquivo é esta:
  
 ```json
 {
@@ -109,6 +119,7 @@ O Gmail não aceita a senha normal da conta em aplicações externas. É necess�
 2. Ative a **Verificação em duas etapas**, caso ainda não esteja ativa.
 3. Procure por **Senhas de app** e gere uma nova senha.
 4. Copie a senha gerada (sem espaços) para o campo `Smtp.Password`.
+
 Os campos `Smtp.User` e `Email.From` devem ser o mesmo endereço do Gmail que gerou a senha de app.
  
 ### Token da brapi (opcional)
@@ -118,6 +129,7 @@ Os ativos PETR4, VALE3, MGLU3 e ITUB4 podem ser consultados sem autenticação. 
 1. Crie uma conta gratuita em [brapi.dev](https://brapi.dev).
 2. No painel, copie a chave exibida em **Sua chave de API**.
 3. Defina a variável de ambiente `BRAPI_TOKEN` antes de executar o programa.
+   
 Git Bash:
  
 ```bash
@@ -237,6 +249,36 @@ Considerando uma cotação atual de R$ 52,71:
  
 Ou seja: para provocar um alerta de venda, use um preço de venda **abaixo** da cotação atual; para um alerta de compra, use um preço de compra **acima** dela.
  
+## Testes automatizados
+ 
+A regra que decide quando enviar um alerta fica isolada na classe `AlertMonitor`, e é testada com xUnit em dois grupos:
+ 
+- **Testes unitários** (`AlertMonitorTests.cs`): usam preços fixos, sem consultar a API e sem enviar e-mails. Assim o resultado é sempre o mesmo, e dá para simular sequências de preço que não se controlam ao vivo.
+- **Testes com cotação real** (`CotacaoRealTests.cs`): consultam a cotação atual da VALE3 na brapi e montam os limites em volta dela, para verificar a consulta à API junto com a regra. Precisam de conexão com a internet.
+```bash
+dotnet test tests/StockQuoteAlert.Tests
+```
+ 
+### Testes unitários
+ 
+| Teste | O que verifica |
+|---|---|
+| `PrecoDentroDaFaixa_NaoEnviaAlerta` | Cotação entre os limites não gera alerta |
+| `PrecoIgualAoLimite_NaoDisparaAlerta` | Cotação igual a um dos limites não gera alerta (comparação estrita) |
+| `AcimaDaVenda_EnviaUmaVezSo` | O alerta de venda não se repete enquanto a cotação continua acima do limite |
+| `VoltaParaFaixa_LiberaNovoAlerta` | Depois de voltar à faixa, um novo alerta pode ser enviado |
+| `EnvioFalhou_TentaDeNovoNaProximaConsulta` | Um alerta que não foi marcado como enviado é tentado de novo |
+ 
+### Testes com cotação real
+ 
+| Teste | O que verifica |
+|---|---|
+| `CotacaoReal_AcimaDaVenda_DisparaAlertaDeVenda` | Com o limite de venda abaixo da cotação atual, o alerta de venda é disparado |
+| `CotacaoReal_AbaixoDaCompra_DisparaAlertaDeCompra` | Com o limite de compra acima da cotação atual, o alerta de compra é disparado |
+| `CotacaoReal_DentroDaFaixa_NaoDisparaAlerta` | Com a cotação atual entre os limites, nenhum alerta é disparado |
+ 
+O envio dos e-mails é verificado pelos testes manuais descritos na seção anterior.
+ 
 ## Como encerrar o monitoramento
  
 Pressione **Ctrl+C**. O programa interrompe a espera entre as consultas e encerra exibindo a mensagem `Monitoramento encerrado.`. Se uma consulta ou um envio de e-mail estiver em andamento, ele é concluído antes do encerramento (no máximo 15 segundos, que é o tempo limite da consulta).
@@ -250,6 +292,8 @@ Pressione **Ctrl+C**. O programa interrompe a espera entre as consultas e encerr
 - **Estado em memória:** o controle de alertas enviados não é persistido. Ao reiniciar o programa, um alerta já enviado pode ser enviado novamente.
 - **Imagens dos alertas:** a pasta `assets` precisa estar ao lado do executável. Sem ela, o envio do e-mail falha e o programa tenta novamente no ciclo seguinte.
 - **Verificação de revogação de certificado:** a verificação de revogação do certificado SMTP está desativada, pois antivírus que inspecionam conexões de e-mail impedem essa verificação no Windows. A conexão continua criptografada e o certificado do servidor continua sendo validado.
+
+  
 ## Utilização de ferramentas de IA
  
 Durante o desenvolvimento, utilizei o **Claude** (Anthropic) como apoio. Como minha experiência é principalmente com JavaScript, TypeScript, React, Angular, Node.js e PHP, usei a ferramenta como um instrutor de C#, para:
@@ -259,6 +303,7 @@ Durante o desenvolvimento, utilizei o **Claude** (Anthropic) como apoio. Como mi
 - Propor e explicar trechos de código, que revisei, executei e testei etapa por etapa
 - Investigar erros durante os testes, como a falha de validação de certificado no envio de e-mails
 - Criar as imagens dos e-mails de alerta
+- Sugerir a separação da regra de alertas na classe `AlertMonitor` e os cenários dos testes automatizados
 - Consultar a documentação da brapi e auxiliar na redação deste README
 
   
